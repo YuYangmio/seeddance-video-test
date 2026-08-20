@@ -106,6 +106,8 @@ export default function VerifyPage() {
 
   // --- 表单: 厂商配置 ---
   const DEFAULT_ENDPOINT = 'https://api.minimaxi.com/v2/video_generation';
+  const SEEDANCE_DEFAULT_ENDPOINT = 'https://api.seedance.com/v1/video/generations';
+  const SEEDANCE_DEFAULT_MODEL = 'Seedance-Video-v1';
   const savedVendor = getSavedVendorConfig();
   // 自动纠正旧的错误域名 (api.minimax.chat -> api.minimaxi.com)
   if (savedVendor?.config?.endpoint?.includes('api.minimax.chat')) {
@@ -274,6 +276,35 @@ export default function VerifyPage() {
     if (rememberVendor) saveVendorConfig(vendor, config);
     else clearSavedVendorConfig();
   }, [rememberVendor, vendor, config]);
+
+  // 切换 vendor 时自动填充默认 endpoint/model（仅当值仍是另一厂商的默认值时才切换）
+  useEffect(() => {
+    setConfig((c) => {
+      let nextEnd = c.endpoint;
+      let nextModel = c.model;
+
+      if (vendor === 'seedance') {
+        if (c.endpoint === DEFAULT_ENDPOINT) {
+          nextEnd = SEEDANCE_DEFAULT_ENDPOINT;
+        }
+        if (c.model === 'MiniMax-H3') {
+          nextModel = SEEDANCE_DEFAULT_MODEL;
+        }
+      } else if (vendor === 'minimax') {
+        if (c.endpoint === SEEDANCE_DEFAULT_ENDPOINT) {
+          nextEnd = DEFAULT_ENDPOINT;
+        }
+        if (c.model === SEEDANCE_DEFAULT_MODEL) {
+          nextModel = 'MiniMax-H3';
+        }
+      }
+
+      if (nextEnd === c.endpoint && nextModel === c.model) {
+        return c;
+      }
+      return { ...c, endpoint: nextEnd, model: nextModel };
+    });
+  }, [vendor]);
 
   // admin token 保存
   const commitAdminToken = () => {
@@ -480,7 +511,7 @@ export default function VerifyPage() {
                   className={inputCls}
                 >
                   <option value="minimax">MiniMax (已支持)</option>
-                  <option value="seedance" disabled>Seedance (待接入)</option>
+                  <option value="seedance">Seedance (已支持)</option>
                   <option value="custom" disabled>Custom (待接入)</option>
                 </select>
               </Field>
@@ -489,7 +520,13 @@ export default function VerifyPage() {
                 <input
                   type="password"
                   autoComplete="off"
-                  placeholder="MiniMax API Key"
+                  placeholder={
+                    vendor === 'seedance'
+                      ? 'Seedance API Key'
+                      : vendor === 'minimax'
+                      ? 'MiniMax API Key'
+                      : 'API Key'
+                  }
                   value={config.apiKey}
                   onChange={(e) =>
                     setConfig((c) => ({ ...c, apiKey: e.target.value }))
@@ -499,7 +536,17 @@ export default function VerifyPage() {
                 />
               </Field>
 
-              <Field label="Endpoint" required hint="v2 通常为 https://api.minimaxi.com/v2/video_generation">
+              <Field
+                label="Endpoint"
+                required
+                hint={
+                  vendor === 'seedance'
+                    ? '通常为 https://api.seedance.com/v1/video/generations'
+                    : vendor === 'minimax'
+                    ? 'v2 通常为 https://api.minimaxi.com/v2/video_generation'
+                    : '厂商视频生成接口的完整 URL'
+                }
+              >
                 <input
                   type="text"
                   placeholder="https://..."
@@ -515,7 +562,13 @@ export default function VerifyPage() {
               <Field label="Model" required>
                 <input
                   type="text"
-                  placeholder="如 MiniMax-H3"
+                  placeholder={
+                    vendor === 'seedance'
+                      ? '如 Seedance-Video-v1'
+                      : vendor === 'minimax'
+                      ? '如 MiniMax-H3'
+                      : '模型名'
+                  }
                   value={config.model}
                   onChange={(e) =>
                     setConfig((c) => ({ ...c, model: e.target.value }))

@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { minimaxCreate, minimaxPoll } from '../vendors/minimax';
+import { seedanceCreate, seedancePoll } from '../vendors/seedance';
 import type {
   VendorGenerateResponse,
   VendorPollResponse,
@@ -76,21 +77,24 @@ vendorRouter.post(
   async (c) => {
     const body = c.req.valid('json');
     try {
-      if (body.vendor === 'seedance' || body.vendor === 'custom') {
+      if (body.vendor === 'seedance') {
+        const res = await seedanceCreate(body.config, body.prompt, body.params);
+        return c.json({ taskId: res.taskId }, 200);
+      } else if (body.vendor === 'minimax') {
+        const res = await minimaxCreate(body.config, body.prompt, body.params);
+        const resp: VendorGenerateResponse = { taskId: res.taskId };
+        return c.json(resp, 200);
+      } else {
         return c.json(
           {
             error: {
               code: 'VENDOR_NOT_IMPLEMENTED',
-              message: `vendor ${body.vendor} 暂未实现，目前仅支持 minimax`,
+              message: 'vendor custom 暂未实现，目前仅支持 minimax、seedance',
             },
           },
           400,
         );
       }
-
-      const res = await minimaxCreate(body.config, body.prompt, body.params);
-      const resp: VendorGenerateResponse = { taskId: res.taskId };
-      return c.json(resp, 200);
     } catch (err) {
       const e = err as any;
       const upstreamStatus = e.upstreamStatus ?? null;
@@ -150,20 +154,23 @@ vendorRouter.post(
   async (c) => {
     const body = c.req.valid('json');
     try {
-      if (body.vendor !== 'minimax') {
+      if (body.vendor === 'minimax') {
+        const res: VendorPollResponse = await minimaxPoll(body.config, body.taskId);
+        return c.json(res, 200);
+      } else if (body.vendor === 'seedance') {
+        const res2: VendorPollResponse = await seedancePoll(body.config, body.taskId);
+        return c.json(res2, 200);
+      } else {
         return c.json(
           {
             error: {
               code: 'VENDOR_NOT_IMPLEMENTED',
-              message: `vendor ${body.vendor} 暂未实现，目前仅支持 minimax`,
+              message: `vendor ${body.vendor} 暂未实现，目前仅支持 minimax、seedance`,
             },
           },
           400,
         );
       }
-
-      const res: VendorPollResponse = await minimaxPoll(body.config, body.taskId);
-      return c.json(res, 200);
     } catch (err) {
       const e = err as any;
       const upstreamStatus = e.upstreamStatus ?? null;

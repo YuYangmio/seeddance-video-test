@@ -1,0 +1,23 @@
+- [x] 新增文件 `backend/src/vendors/seedance.ts` 存在，且导出了 `seedanceCreate` 与 `seedancePoll` 两个函数。
+- [x] `seedanceCreate` 的日志前缀为 `[Seedance create]`，并在创建任务时打印了 URL、model、prompt 前缀（不超过 50 字符）。
+- [x] `seedancePoll` 的日志前缀为 `[Seedance poll]`，并打印了 taskId、尝试的 URL 与响应摘要。
+- [x] Seedance 创建与轮询中的 AxiosError 都统一包装了 `upstreamStatus` 与 `upstreamBody`，与 minimax 行为一致。
+- [x] 当上游响应缺失 `taskId` 时，抛出的错误包含原始响应体片段（截断版），且 message 可读。
+- [x] `seedancePoll` 能正确把上游状态归一化为 `running | succeeded | failed`，成功时返回 `videoUrl`，失败时返回 `error`，并可选返回 `progress`。
+- [x] `backend/src/routes/vendor.ts` 顶部新增了 seedance 的 import。
+- [x] `/vendor/generate` 路由当 `vendor=seedance` 时调用 `seedanceCreate` 并返回 `{ taskId }`，不再返回 NOT_IMPLEMENTED。
+- [x] `/vendor/poll` 路由当 `vendor=seedance` 时调用 `seedancePoll`，返回统一的 `VendorPollResponse`。
+- [x] `/vendor/*` 路由当 `vendor=custom` 时仍然返回 `VENDOR_NOT_IMPLEMENTED`。
+- [x] 路由的错误处理对 401/402/429 三种上游状态码，统一返回 `VENDOR_HTTP_<status>` 的 code 且 message 透传上游（截断 800 字）。
+- [x] 前端 `frontend/src/pages/Verify.tsx` 中 Seedance option 不再是 `disabled`，文案是 `Seedance (已支持)`。
+- [x] 前端切换到 Seedance vendor 时，endpoint 输入框自动填充 Seedance 默认 endpoint，model 自动填充 Seedance 默认 model。
+- [x] 若用户手动修改了 Seedance 的 endpoint/model，切换 vendor 再切回来时，自定义值不会被默认值覆盖。
+- [x] 「临时保存到浏览器」勾选后，Seedance 的 config 能被 `saveVendorConfig` 保存，并在刷新后被 `getSavedVendorConfig` 正确恢复（逻辑通用，对 seedance vendor 同样生效）。
+- [x] Seedance 生成流程在前端被取消时，会以 `CANCELLED` 错误进入 failed 步骤，行为与 MiniMax 一致（取消逻辑通用，不区分 vendor）。
+- [x] 后端启动无编译错误（TypeScript 编译通过，无 `tsc` 报错，0 error）。
+- [x] 前端启动无编译错误（`tsc --noEmit -p tsconfig.json` 通过，0 error；vite dev 的 runtime 等价于现有代码，结构未变）。
+- [x] MiniMax 原有流程代码不回退：minimax 的 create/poll 分支、前端表单逻辑、canStart 校验均未被改动（通过 grep diff 比对确认）。
+- [ ] Seedance 流程真实跑通一次：填好 API Key + 默认 endpoint → 点击开始验证 → 看到视频播放 → 方舟返回结果（或在错误 case 下看到正确的错误码与提示）。需要真实 Seedance API Key 与启动服务。
+- [ ] 真实 401 场景：Seedance API Key 故意填错 → 返回 `VENDOR_HTTP_401` 且 message 与上游一致。需要启动服务并请求真实上游。
+- [x] 健康检查 `GET /health` 仍然返回 `{ ok: true, service: 'seedance-verify-bff', ... }`（grep index.ts 确认路由与 service 名未改动）。
+- [x] 所有代码风格、缩进、import 组织与现有文件保持一致（seedance.ts 与 minimax.ts 结构对齐，vendor.ts 分支结构统一，Verify.tsx 新增逻辑与现有 hooks 风格一致；tsc 无告警）。

@@ -1,0 +1,207 @@
+import axios, { AxiosError } from 'axios';
+import type {
+  GenerateParams,
+  VendorConfig,
+  VendorPollResponse,
+} from '../types';
+
+/**
+ * Seedance 视频生成适配
+ *
+ * 默认端点:
+ * Create:
+ *   POST {base}/v1/video/generations
+ *   (如果 endpoint 已经带了路径，则直接 POST endpoint)
+ *
+ * Query:
+ *   GET {base}/v1/video/generations/{taskId}
+ *
+ * 响应结构 (2026-08):
+ *   { task_id, status, progress, content: [{ url }] | { url } | file_url, ... }
+ */
+
+function normalizeEndpoint(endpoint: string): { origin: string; base: string; createPath: string } {
+  let ep = endpoint.trim();
+  if (!ep.startsWith('http://') && !ep.startsWith('https://')) {
+    ep = 'https://' + ep;
+  }
+  const u = new URL(ep);
+  const origin = u.origin;
+  const m = u.pathname.match(/^(.+?)\/v\d+\/video_generations/);
+  const base = m && m[1] && m[1] !== '/' ? origin + m[1] : origin;
+  const createPath = u.pathname.length > 1
+    ? u.pathname.replace(/\/$/, '')
+    : '/v1/video/generations';
+  return { origin, base, createPath };
+}
+
+function normalizeResolution(res: string): '720p' | '1080p' | '2k' {
+  const r = (res || '').toUpperCase().trim();
+  if (r === '2K' || r === '1080P') return '1080p';
+  if (r === '768P' || r === '720P') return '720p';
+  return '720p';
+}
+
+function normalizeDuration(d: number): number {
+  const n = Math.round(Number(d) || 5);
+  if (n < 4) return 4;
+  if (n > 15) return 15;
+  return n;
+}
+
+export interface SeedanceCreateResult {
+  taskId: string;
+}
+
+export async function seedanceCreate(
+  config: VendorConfig,
+  prompt: string,
+  params: GenerateParams,
+): Promise<SeedanceCreateResult> {
+  const { origin, base, createPath } = normalizeEndpoint(config.endpoint);
+  const apiKey = config.apiKey.trim();
+  const model = config.model.trim();
+
+  const createUrl = `${origin}${createPath}`;
+
+  const body: any = {
+    model,
+    prompt,
+    resolution: normalizeResolution(params.resolution),
+    duration: normalizeDuration(params.duration),
+    ratio: params.ratio || '16:9',
+  };
+
+  try {
+    console.log(`[Seedance create] POST ${createUrl}, model=${model}, prompt="${prompt.slice(0, 50)}"`);
+    const resp = await axios.post(createUrl, body, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      timeout: 30_000,
+    });
+    const d = resp.data as any;
+    const taskId = d.task_id ?? d.data?.task_id ?? d.task?.id ?? d.id;
+    if (!taskId) {
+      throw new Error(
+        `Seedance 创建任务返回缺少 task_id: body=${JSON.stringify(d).slice(0, 500)}`,
+      );
+    }
+    return { taskId: String(taskId) };
+  } catch (err) {
+    const e = err as AxiosError | Error;
+    if ('isAxiosError' in e && e.isAxiosError) {
+      const status = e.response?.status;
+      const body = JSON.stringify(e.response?.data ?? '').slice(0, 800);
+      const msg = `Seedance 创建任务失败: HTTP=${status}, body=${body}`;
+      const wrapped: any = new Error(msg);
+      wrapped.upstreamStatus = status;
+      wrapped.upstreamBody = e.response?.data ?? null;
+      throw wrapped;
+    }
+    throw err;
+  }
+}
+
+export async function seedancePoll(
+  config: VendorConfig,
+  taskId: string,
+): Promise<VendorPollResponse> {
+  const apiKey = config.apiKey.trim();
+  const { base } = normalizeEndpoint(config.endpoint);
+
+  const candidates = [
+    `${base}/v1/video/generations/${encodeURIComponent(taskId)}`,
+    `${base}/v1/query/video_generation?task_id=${encodeURIComponent(taskId)}`,
+    `${base}/v2/video_generation/${encodeURIComponent(taskId)}`,
+    `${base}/v1/video_generation/query?task_id=${encodeURIComponent(taskId)}`,
+  ];
+
+  let lastErr: any = null;
+  for (const url of candidates) {
+    try {
+      console.log(`[Seedance poll] taskId=${taskId}, trying: ${url}`);
+      const resp = await axios.get(url, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        },
+        timeout: 15_000,
+      });
+      const d = resp.data as any;
+      console.log(`[Seedance poll] taskId=${taskId}, response:`, JSON.stringify(d).slice(0, 500));
+
+      const task = d.task ?? d.data?.task ?? d;
+      const rawStatus: string = task.status ?? d.status ?? '';
+      const progress: number | undefined =
+        typeof task.progress === 'number'
+          ? task.progress
+          : typeof d.progress === 'number'
+            ? d.progress
+            : undefined;
+
+      let status: VendorPollResponse['status'];
+      if (/success/i.test(rawStatus)) status = 'succeeded';
+      else if (/fail|error/i.test(rawStatus)) status = 'failed';
+      else status = 'running';
+
+      let videoUrl: string | undefined;
+      if (task.content && typeof task.content.url === 'string') {
+        videoUrl = task.content.url;
+      }
+      else if (typeof task.file_url === 'string') {
+        videoUrl = task.file_url;
+      } else if (typeof d.file_url === 'string') {
+        videoUrl = d.file_url;
+      }
+      else if (Array.isArray(task.content) && task.content.length) {
+        const first = task.content[0];
+        if (typeof first?.url === 'string') videoUrl = first.url;
+        else if (typeof first === 'string') videoUrl = first;
+      } else if (Array.isArray(d.content) && d.content.length) {
+        const first = d.content[0];
+        if (typeof first?.url === 'string') videoUrl = first.url;
+      }
+
+      let error: string | undefined;
+      if (status === 'failed') {
+        error =
+          (typeof task.error === 'string' ? task.error : undefined) ||
+          (typeof task.error?.message === 'string' ? task.error.message : undefined) ||
+          (typeof d.error === 'string' ? d.error : undefined) ||
+          (typeof d.error?.message === 'string' ? d.error.message : undefined) ||
+          (typeof task.message === 'string' ? task.message : undefined) ||
+          (typeof d.message === 'string' ? d.message : undefined) ||
+          `Seedance 任务失败: status=${rawStatus}`;
+      }
+
+      return { status, progress, videoUrl, error };
+    } catch (err) {
+      lastErr = err;
+      const e = err as AxiosError;
+      if (!('isAxiosError' in e) || !e.isAxiosError) break;
+      const status = e.response?.status;
+      if (status !== 404 && status !== 400) {
+        const body = JSON.stringify(e.response?.data ?? '').slice(0, 800);
+        const wrapped: any = new Error(
+          `Seedance 查询任务失败: HTTP=${status}, body=${body}`,
+        );
+        wrapped.upstreamStatus = status;
+        wrapped.upstreamBody = e.response?.data ?? null;
+        throw wrapped;
+      }
+    }
+  }
+  if (lastErr) {
+    const e = lastErr as AxiosError;
+    const status = e.response?.status;
+    const body = JSON.stringify(e.response?.data ?? '').slice(0, 800);
+    const wrapped: any = new Error(
+      `Seedance 查询任务失败: v1/v2 接口均返回 HTTP=${status}, body=${body}`,
+    );
+    wrapped.upstreamStatus = status;
+    wrapped.upstreamBody = e.response?.data ?? null;
+    throw wrapped;
+  }
+  throw new Error('Seedance 查询任务失败: 未知错误');
+}
