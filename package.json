@@ -1,0 +1,23 @@
+{
+  "name": "seedance-verify-tool",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Seedance 产物溯源验证工具",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+
+    "dev:frontend:3000": "VITE_PORT=3000 npm run dev:frontend",
+    "dev:frontend:8080": "VITE_PORT=8080 npm run dev:frontend",
+    "dev:frontend:8000": "VITE_PORT=8000 npm run dev:frontend",
+    "dev:backend:9000": "PORT=9000 npm run dev:backend",
+
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "cd frontend && npm run build"
+  },
+  "_comment": "任意端口写法：VITE_PORT=<any> npm run dev:frontend   或   PORT=<any> npm run dev:backend；BFF CORS 在 dev 下自动放行 localhost 任意端口"
+}
