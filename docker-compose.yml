@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  app:
+    image: cr-cn-beijing.volces.com/seeddance-team/seeddance-verify:latest
+    container_name: seeddance-verify
+    restart: always
+    ports:
+      - "${APP_PORT:-8787}:8787"
+    environment:
+      # ====== 火山方舟鉴伪 API（管理接口，IAM AK/SK，支持临时 Session Token）======
+      VOLCENGINE_ACCESS_KEY: "${VOLCENGINE_ACCESS_KEY:?请在 .env 或环境变量中设置 VOLCENGINE_ACCESS_KEY}"
+      VOLCENGINE_SECRET_KEY: "${VOLCENGINE_SECRET_KEY:?请在 .env 或环境变量中设置 VOLCENGINE_SECRET_KEY}"
+      # 仅使用「临时凭证」时需要填写（长期 AK/SK 留空即可）
+      VOLCENGINE_SESSION_TOKEN: "${VOLCENGINE_SESSION_TOKEN:-}"
+      ARK_REGION: "${ARK_REGION:-cn-beijing}"
+
+      # ====== 管理员鉴权 ======
+      AUTH_MODE: "${AUTH_MODE:-simple}"
+      # simple 模式下必填，建议使用 `openssl rand -hex 32` 生成强随机字符串
+      VERIFY_ADMIN_TOKEN: "${VERIFY_ADMIN_TOKEN:?请在 .env 或环境变量中设置 VERIFY_ADMIN_TOKEN}"
+
+      # ====== 服务端口（容器内固定 8787，外部通过 APP_PORT 映射）======
+      PORT: "8787"
+      NODE_ENV: "${NODE_ENV:-production}"
+
+      # ====== CORS 白名单（可选，逗号分隔；不填则默认回显同源）======
+      CORS_ORIGINS: "${CORS_ORIGINS:-}"
+
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8787/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
