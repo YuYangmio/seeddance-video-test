@@ -44,12 +44,6 @@ function normalizeEndpoint(endpoint: string): { origin: string; base: string; cr
   return { origin, base, createPath };
 }
 
-function normalizeResolution(res: string): '768P' | '2K' {
-  const r = (res || '').toUpperCase().trim();
-  if (r === '2K' || r === '1080P') return '2K';
-  return '768P';
-}
-
 function normalizeDuration(d: number): number {
   const n = Math.round(Number(d) || 5);
   if (n < 4) return 4;
@@ -75,7 +69,7 @@ export async function minimaxCreate(
   const body: any = {
     model,
     content: [{ type: 'text', text: prompt }],
-    resolution: normalizeResolution(params.resolution),
+    resolution: params.resolution,
     duration: normalizeDuration(params.duration),
     ratio: params.ratio || '16:9',
   };

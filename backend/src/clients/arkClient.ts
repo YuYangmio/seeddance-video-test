@@ -160,8 +160,8 @@ export async function createOfficialResultQuery(
   contentUrl: string,
 ): Promise<string> {
   const body = JSON.stringify({
-    ContentUrl: contentUrl,
-    ResourceType: 'video',
+    Type: 'content_url',
+    ContentURL: contentUrl,
   });
 
   const req = buildSignedRequest({

@@ -8,7 +8,7 @@ export interface VendorConfig {
   model: string;
 }
 
-export type Resolution = '768P' | '2K' | '1080P' | '720P';
+export type Resolution = string;
 export type Duration = 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15;
 
 export interface GenerateParams {

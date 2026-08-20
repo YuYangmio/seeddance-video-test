@@ -21,7 +21,7 @@ const vendorConfigSchema = z.object({
 });
 
 const generateParamsSchema = z.object({
-  resolution: z.enum(['768P', '2K', '1080P', '720P']),
+  resolution: z.string().min(1, 'resolution 不能为空'),
   duration: z.coerce
     .number()
     .pipe(

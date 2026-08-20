@@ -26,7 +26,11 @@ import ProgressTimeline from '@/components/ProgressTimeline';
 import ArkResultCard from '@/components/ArkResultCard';
 import Alert from '@/components/Alert';
 
-const RESOLUTION_OPTIONS: Resolution[] = ['768P', '2K'];
+const VENDOR_RESOLUTIONS: Record<Vendor, { options: string[]; default: string }> = {
+  minimax: { options: ['768P', '2K'], default: '768P' },
+  seedance: { options: ['720p', '1080p'], default: '720p' },
+  custom: { options: ['720p', '1080p', '768P', '2K'], default: '720p' },
+};
 const DURATION_OPTIONS: Duration[] = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 const RATIO_OPTIONS = ['16:9', '9:16', '1:1', '4:3', '3:4'];
 
@@ -106,8 +110,8 @@ export default function VerifyPage() {
 
   // --- 表单: 厂商配置 ---
   const DEFAULT_ENDPOINT = 'https://api.minimaxi.com/v2/video_generation';
-  const SEEDANCE_DEFAULT_ENDPOINT = 'https://api.seedance.com/v1/video/generations';
-  const SEEDANCE_DEFAULT_MODEL = 'Seedance-Video-v1';
+  const SEEDANCE_DEFAULT_ENDPOINT = 'https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks';
+  const SEEDANCE_DEFAULT_MODEL = 'doubao-seedance-2-0-260128';
   const savedVendor = getSavedVendorConfig();
   // 自动纠正旧的错误域名 (api.minimax.chat -> api.minimaxi.com)
   if (savedVendor?.config?.endpoint?.includes('api.minimax.chat')) {
@@ -115,6 +119,11 @@ export default function VerifyPage() {
       'api.minimax.chat',
       'api.minimaxi.com',
     );
+  }
+  // 自动纠正旧的 Seedance 错误域名 (api.seedance.com -> ark.cn-beijing.volces.com)
+  if (savedVendor?.vendor === 'seedance' && savedVendor?.config?.endpoint?.includes('api.seedance.com')) {
+    savedVendor.config.endpoint = SEEDANCE_DEFAULT_ENDPOINT;
+    savedVendor.config.model = SEEDANCE_DEFAULT_MODEL;
   }
   const [vendor, setVendor] = useState<Vendor>(savedVendor?.vendor ?? 'minimax');
   const [config, setConfig] = useState<VendorConfig>(
@@ -128,9 +137,17 @@ export default function VerifyPage() {
 
   // --- 表单: Prompt + 参数 ---
   const [prompt, setPrompt] = useState<string>('一只小松鼠在樱花树下吃橡果，柔和阳光，治愈系');
-  const [resolution, setResolution] = useState<Resolution>('768P');
+  const [resolution, setResolution] = useState<Resolution>(VENDOR_RESOLUTIONS[savedVendor?.vendor ?? 'minimax'].default);
   const [duration, setDuration] = useState<Duration>(5);
   const [ratio, setRatio] = useState<string>('16:9');
+
+  // 切换厂商时自动切换到该厂商的默认分辨率（如果当前分辨率不在新厂商的选项中）
+  useEffect(() => {
+    const opts = VENDOR_RESOLUTIONS[vendor];
+    if (!opts.options.includes(resolution)) {
+      setResolution(opts.default);
+    }
+  }, [vendor, resolution]);
 
   // --- 运行状态机 ---
   const [state, setState] = useState<VerifyState>({ step: 'idle' });
@@ -541,7 +558,7 @@ export default function VerifyPage() {
                 required
                 hint={
                   vendor === 'seedance'
-                    ? '通常为 https://api.seedance.com/v1/video/generations'
+                    ? '通常为 https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks'
                     : vendor === 'minimax'
                     ? 'v2 通常为 https://api.minimaxi.com/v2/video_generation'
                     : '厂商视频生成接口的完整 URL'
@@ -564,7 +581,7 @@ export default function VerifyPage() {
                   type="text"
                   placeholder={
                     vendor === 'seedance'
-                      ? '如 Seedance-Video-v1'
+                      ? '如 doubao-seedance-2-0-260128'
                       : vendor === 'minimax'
                       ? '如 MiniMax-H3'
                       : '模型名'
@@ -632,7 +649,7 @@ export default function VerifyPage() {
                     disabled={isBusy}
                     className={inputCls}
                   >
-                    {RESOLUTION_OPTIONS.map((r) => (
+                    {VENDOR_RESOLUTIONS[vendor].options.map((r: string) => (
                       <option key={r} value={r}>{r}</option>
                     ))}
                   </select>
