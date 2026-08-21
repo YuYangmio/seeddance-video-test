@@ -145,7 +145,7 @@ export async function minimaxPoll(
             : undefined;
 
       let status: VendorPollResponse['status'];
-      if (/success/i.test(rawStatus)) status = 'succeeded';
+      if (/succe/i.test(rawStatus)) status = 'succeeded';
       else if (/fail|error/i.test(rawStatus)) status = 'failed';
       else status = 'running';
 
